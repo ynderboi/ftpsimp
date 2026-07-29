@@ -1,6 +1,6 @@
 ; ftpsimp Windows installer (Inno Setup 6)
 #define MyAppName "ftpsimp"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #define MyAppPublisher "ftpsimp"
 #define MyAppExeName "ftpsimp.exe"
 #define MyAppURL "https://github.com/ynderboi/ftpsimp"
@@ -22,6 +22,7 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesInstallIn64BitMode=x64compatible
+SetupIconFile=..\assets\ftpsimp.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupLogging=yes
 CloseApplications=yes

@@ -11,6 +11,9 @@
 *.apk
 *.aab
 
+# Icon source (keep .ico in repo)
+assets/*-source.png
+
 # Android
 android/.gradle/
 android/build/
