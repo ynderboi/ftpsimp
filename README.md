@@ -4,7 +4,7 @@
 
 Репозиторий: [github.com/ynderboi/ftpsimp](https://github.com/ynderboi/ftpsimp)
 
-**Подробная инструкция:** [docs/GUIDE.md](docs/GUIDE.md)
+**User guide / Инструкция:** [Русский](docs/GUIDE.md) · [English](docs/GUIDE.en.md)
 
 ## Безопасность
 
