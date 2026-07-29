@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -31,12 +32,16 @@ type Server struct {
 	mu       sync.RWMutex
 	root     string
 	addr     string
+	handler  http.Handler
 	http     *http.Server
 	onRoot   func(string) error
 	pin      string
 	authOn   bool
 	readOnly bool
 	sessions *sessionStore
+
+	runMu   sync.Mutex
+	running bool
 }
 
 type entry struct {
@@ -79,32 +84,168 @@ func New(root, addr string, onRoot func(string) error, opt Options) *Server {
 	}
 	mux.Handle("/", http.FileServer(http.FS(static)))
 
-	s.http = &http.Server{
+	s.handler = s.withMiddleware(mux)
+	s.http = s.newHTTP()
+	return s
+}
+
+func (s *Server) newHTTP() *http.Server {
+	s.mu.RLock()
+	addr := s.addr
+	s.mu.RUnlock()
+	return &http.Server{
 		Addr:              addr,
-		Handler:           s.withMiddleware(mux),
+		Handler:           s.handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       0,
 		WriteTimeout:      0,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
-	return s
 }
 
+// Start begins serving in a background goroutine. Safe to call again after Stop.
+func (s *Server) Start() error {
+	s.runMu.Lock()
+	if s.running {
+		s.runMu.Unlock()
+		return nil
+	}
+	hs := s.newHTTP()
+	s.http = hs
+	s.running = true
+	s.runMu.Unlock()
+
+	errCh := make(chan error, 1)
+	go func() {
+		err := hs.ListenAndServe()
+		s.runMu.Lock()
+		if s.http == hs {
+			s.running = false
+		}
+		s.runMu.Unlock()
+		errCh <- err
+	}()
+
+	select {
+	case err := <-errCh:
+		if err == nil || err == http.ErrServerClosed {
+			return nil
+		}
+		return err
+	case <-time.After(150 * time.Millisecond):
+		return nil
+	}
+}
+
+// ListenAndServe starts the server and blocks (legacy). Prefer Start for TUI.
 func (s *Server) ListenAndServe() error {
-	return s.http.ListenAndServe()
+	s.runMu.Lock()
+	s.http = s.newHTTP()
+	s.running = true
+	hs := s.http
+	s.runMu.Unlock()
+	err := hs.ListenAndServe()
+	s.runMu.Lock()
+	if s.http == hs {
+		s.running = false
+	}
+	s.runMu.Unlock()
+	return err
+}
+
+func (s *Server) Stop(ctx context.Context) error {
+	s.runMu.Lock()
+	hs := s.http
+	running := s.running
+	s.runMu.Unlock()
+	if !running || hs == nil {
+		return nil
+	}
+	err := hs.Shutdown(ctx)
+	s.runMu.Lock()
+	s.running = false
+	s.runMu.Unlock()
+	return err
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.Stop(ctx)
+}
+
+func (s *Server) Running() bool {
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	return s.running
+}
+
+func (s *Server) Addr() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.addr
 }
 
 func (s *Server) PIN() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.pin
 }
 
 func (s *Server) AuthOn() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.authOn
 }
 
 func (s *Server) ReadOnly() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.readOnly
+}
+
+func (s *Server) SessionCount() int {
+	return s.sessions.count()
+}
+
+func (s *Server) SetReadOnly(v bool) {
+	s.mu.Lock()
+	s.readOnly = v
+	s.mu.Unlock()
+}
+
+func (s *Server) SetAuth(on bool) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.authOn = on
+	if on && strings.TrimSpace(s.pin) == "" {
+		s.pin = generatePIN()
+	}
+	if !on {
+		s.sessions.clear()
+	}
+	return s.pin
+}
+
+func (s *Server) SetPIN(pin string) error {
+	pin = strings.TrimSpace(pin)
+	if pin == "" {
+		return fmt.Errorf("empty pin")
+	}
+	s.mu.Lock()
+	s.pin = pin
+	s.mu.Unlock()
+	s.sessions.clear()
+	return nil
+}
+
+func (s *Server) RotatePIN() string {
+	pin := generatePIN()
+	s.mu.Lock()
+	s.pin = pin
+	s.authOn = true
+	s.mu.Unlock()
+	s.sessions.clear()
+	return pin
 }
 
 func (s *Server) Root() string {
@@ -159,12 +300,12 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			case "/api/logout":
 				// session optional
 			default:
-				if s.authOn && !s.authenticated(r) {
+				if s.AuthOn() && !s.authenticated(r) {
 					http.Error(w, "unauthorized", http.StatusUnauthorized)
 					return
 				}
 			}
-			if s.readOnly && isWriteAPI(pathOnly, r.Method) {
+			if s.ReadOnly() && isWriteAPI(pathOnly, r.Method) {
 				http.Error(w, "read-only mode", http.StatusForbidden)
 				return
 			}
@@ -188,9 +329,9 @@ func isWriteAPI(path, method string) bool {
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	authed := s.authenticated(r)
 	out := map[string]any{
-		"authRequired":  s.authOn,
+		"authRequired":  s.AuthOn(),
 		"authenticated": authed,
-		"readOnly":      s.readOnly,
+		"readOnly":      s.ReadOnly(),
 		"settingsLocal": true,
 	}
 	if authed {
@@ -204,7 +345,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !s.authOn {
+	if !s.AuthOn() {
 		writeJSON(w, map[string]any{"ok": true, "authRequired": false})
 		return
 	}
@@ -215,7 +356,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad json", http.StatusBadRequest)
 		return
 	}
-	if !pinEqual(body.PIN, s.pin) {
+	if !pinEqual(body.PIN, s.PIN()) {
 		time.Sleep(200 * time.Millisecond)
 		http.Error(w, "invalid pin", http.StatusUnauthorized)
 		return
@@ -226,7 +367,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		"ok":       true,
 		"token":    id,
 		"root":     s.Root(),
-		"readOnly": s.readOnly,
+		"readOnly": s.ReadOnly(),
 	})
 }
 
@@ -245,7 +386,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"root":     s.Root(),
-		"readOnly": s.readOnly,
+		"readOnly": s.ReadOnly(),
 	})
 }
 
@@ -254,7 +395,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		writeJSON(w, map[string]any{
 			"root":          s.Root(),
-			"readOnly":      s.readOnly,
+			"readOnly":      s.ReadOnly(),
 			"settingsLocal": true,
 			"canChangeRoot": isLocalClient(r),
 		})

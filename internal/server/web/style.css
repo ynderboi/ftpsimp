@@ -398,6 +398,12 @@ input:disabled {
   outline: none;
 }
 
+.menu-item.ro-disabled,
+.file-menu.ro-disabled {
+  color: var(--face-dark);
+  text-shadow: 1px 1px 0 #fff;
+}
+
 .lang-switch {
   display: inline-flex;
   align-items: center;

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net"
@@ -9,9 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ynderboi/ftpsimp/internal/config"
 	"github.com/ynderboi/ftpsimp/internal/server"
+	"github.com/ynderboi/ftpsimp/internal/tui"
 )
 
 func main() {
@@ -20,6 +23,7 @@ func main() {
 	pinFlag := flag.String("pin", "", "fixed PIN (empty = from settings or generate)")
 	openFlag := flag.Bool("open", false, "disable PIN auth (trusted LAN only)")
 	roFlag := flag.Bool("readonly", false, "read-only: list and download only")
+	plainFlag := flag.Bool("plain", false, "disable interactive TUI (classic console log)")
 	flag.Parse()
 
 	cfg := config.Load()
@@ -35,7 +39,6 @@ func main() {
 	if pin == "" {
 		pin = strings.TrimSpace(cfg.PIN)
 	}
-	// -open / -readonly apply to this process; persisted only via config.json fields.
 	authOn := !cfg.Open && !*openFlag
 	readOnly := cfg.ReadOnly || *roFlag
 
@@ -67,6 +70,11 @@ func main() {
 
 	cfgPath, _ := config.Path()
 	ips := localIPs()
+	urls := make([]string, 0, len(ips))
+	for _, ip := range ips {
+		urls = append(urls, fmt.Sprintf("http://%s:%d", ip, cfg.Port))
+	}
+
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	srv := server.New(abs, addr, func(root string) error {
 		persist.Root = root
@@ -77,53 +85,44 @@ func main() {
 		ReadOnly: readOnly,
 	})
 
-	fmt.Println()
-	fmt.Println("  ftpsimp — LAN file share")
-	fmt.Println("  ────────────────────────────────")
-	fmt.Printf("  Folder:   %s\n", abs)
-	fmt.Printf("  Port:     %d\n", cfg.Port)
-	if readOnly {
-		fmt.Println("  Mode:     READ-ONLY")
-	} else {
-		fmt.Println("  Mode:     read/write")
+	if err := srv.Start(); err != nil {
+		fatal("server error: %v", err)
 	}
-	if authOn {
-		fmt.Printf("  PIN:      %s\n", srv.PIN())
-		fmt.Println("  Auth:     ON (enter PIN in browser)")
-	} else {
-		fmt.Println("  Auth:     OFF (-open / config) — anyone on LAN can access")
-	}
-	if cfgPath != "" {
-		fmt.Printf("  Settings: %s\n", cfgPath)
-	}
-	fmt.Println()
-	if len(ips) == 0 {
-		fmt.Println("  No LAN address found. Connect to Wi‑Fi and restart.")
-	} else {
-		fmt.Println("  Open in browser on another device:")
-		for _, ip := range ips {
-			fmt.Printf("    http://%s:%d\n", ip, cfg.Port)
-		}
-	}
-	fmt.Println()
-	fmt.Println("  Смена корневой папки — только с хоста → Settings.")
-	fmt.Println("  Press Ctrl+C to stop.")
-	fmt.Println()
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- srv.ListenAndServe()
-	}()
+	opt := tui.Options{
+		Server:   srv,
+		Persist:  &persist,
+		URLs:     urls,
+		CfgPath:  cfgPath,
+		LocalIPs: localIPs,
+	}
+
+	useTUI := !*plainFlag && isTerminal()
+	if useTUI {
+		if err := tui.Run(opt); err != nil {
+			fmt.Fprintf(os.Stderr, "tui: %v\n", err)
+		}
+		return
+	}
+
+	tui.PrintPlain(opt)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	select {
-	case <-stop:
-		fmt.Println("\n  Stopped.")
-	case err := <-errCh:
-		fatal("server error: %v", err)
+	<-stop
+	fmt.Println("\n  Stopped.")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = srv.Stop(ctx)
+}
+
+func isTerminal() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
 	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
 func fatal(format string, args ...any) {

@@ -24,6 +24,8 @@
       ready: "Ready",
       readWrite: "Read/Write",
       readOnly: "Read-only",
+      readOnlyUpload: "Read-only mode: uploads are disabled on the host.",
+      readOnlyMkdir: "Read-only mode: cannot create folders.",
       copying: "Copying…",
       dropHint: "Drop files to upload to this folder.",
       rootLabel: "Root folder (this PC only):",
@@ -74,6 +76,8 @@
       ready: "Готово",
       readWrite: "Чтение/запись",
       readOnly: "Только чтение",
+      readOnlyUpload: "Режим только чтения: загрузка файлов отключена на хосте.",
+      readOnlyMkdir: "Режим только чтения: нельзя создавать папки.",
       copying: "Копирование…",
       dropHint: "Отпустите файлы для загрузки в эту папку.",
       rootLabel: "Корневая папка (только с этого ПК):",
@@ -524,10 +528,15 @@
   });
 
   function applyReadOnlyUI() {
-    btnMkdir.hidden = readOnly;
-    btnUploadWrap.hidden = readOnly;
-    btnMkdir.disabled = readOnly;
+    btnMkdir.hidden = false;
+    btnUploadWrap.hidden = false;
+    btnMkdir.classList.toggle("ro-disabled", readOnly);
+    btnUploadWrap.classList.toggle("ro-disabled", readOnly);
     footRight.textContent = readOnly ? t("readOnly") : t("readWrite");
+  }
+
+  function warnReadOnly(kind) {
+    showStatus(t(kind === "mkdir" ? "readOnlyMkdir" : "readOnlyUpload"), "error");
   }
 
   function updateStatusline() {
@@ -918,7 +927,11 @@
 
   async function uploadFiles(fileList, overwrite = false) {
     const files = Array.from(fileList || []);
-    if (!files.length || readOnly) return;
+    if (!files.length) return;
+    if (readOnly) {
+      warnReadOnly("upload");
+      return;
+    }
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f, f.name));
     showStatus(t("uploading", { n: files.length }));
@@ -938,13 +951,27 @@
     }
   }
 
+  btnUploadWrap.addEventListener(
+    "click",
+    (e) => {
+      if (!readOnly) return;
+      e.preventDefault();
+      e.stopPropagation();
+      warnReadOnly("upload");
+    },
+    true
+  );
+
   fileInput.addEventListener("change", () => {
     uploadFiles(fileInput.files);
     fileInput.value = "";
   });
 
   btnMkdir.addEventListener("click", async () => {
-    if (readOnly) return;
+    if (readOnly) {
+      warnReadOnly("mkdir");
+      return;
+    }
     const name = prompt(t("mkdirPrompt"));
     if (!name) return;
     try {
@@ -983,8 +1010,9 @@
 
   let dragDepth = 0;
   window.addEventListener("dragenter", (e) => {
-    if (readOnly || app.hasAttribute("hidden")) return;
+    if (app.hasAttribute("hidden")) return;
     e.preventDefault();
+    if (readOnly) return;
     dragDepth++;
     overlay.hidden = false;
   });
@@ -998,7 +1026,11 @@
     e.preventDefault();
     dragDepth = 0;
     overlay.hidden = true;
-    if (readOnly || app.hasAttribute("hidden")) return;
+    if (app.hasAttribute("hidden")) return;
+    if (readOnly) {
+      warnReadOnly("upload");
+      return;
+    }
     if (e.dataTransfer && e.dataTransfer.files) uploadFiles(e.dataTransfer.files);
   });
 

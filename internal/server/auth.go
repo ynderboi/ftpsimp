@@ -61,6 +61,27 @@ func (s *sessionStore) revoke(id string) {
 	s.mu.Unlock()
 }
 
+func (s *sessionStore) clear() {
+	s.mu.Lock()
+	s.byID = make(map[string]time.Time)
+	s.mu.Unlock()
+}
+
+func (s *sessionStore) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	n := 0
+	for id, exp := range s.byID {
+		if now.After(exp) {
+			delete(s.byID, id)
+			continue
+		}
+		n++
+	}
+	return n
+}
+
 func generatePIN() string {
 	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
 	if err != nil {
@@ -143,7 +164,7 @@ func (s *Server) sessionID(r *http.Request) string {
 }
 
 func (s *Server) authenticated(r *http.Request) bool {
-	if !s.authOn {
+	if !s.AuthOn() {
 		return true
 	}
 	return s.sessions.valid(s.sessionID(r))
