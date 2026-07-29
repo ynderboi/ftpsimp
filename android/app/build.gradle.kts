@@ -11,8 +11,8 @@ android {
         applicationId = "com.ftpsimp.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.1"
     }
 
     buildTypes {
@@ -22,6 +22,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Sideload/GitHub release: sign with debug key so APK installs without a private keystore.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
