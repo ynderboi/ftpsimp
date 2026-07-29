@@ -8,4 +8,5 @@
     <string name="server_stopped">Сервер остановлен</string>
     <string name="notification_channel">Файловый сервер</string>
     <string name="notification_text">Откройте адрес на другом устройстве</string>
+    <string name="pin_label">PIN для входа в браузере</string>
 </resources>

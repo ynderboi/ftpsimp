@@ -17,6 +17,9 @@ import (
 func main() {
 	portFlag := flag.Int("port", 0, "HTTP port (0 = from settings)")
 	dirFlag := flag.String("dir", "", "shared folder (empty = from settings)")
+	pinFlag := flag.String("pin", "", "fixed PIN (empty = from settings or generate)")
+	openFlag := flag.Bool("open", false, "disable PIN auth (trusted LAN only)")
+	roFlag := flag.Bool("readonly", false, "read-only: list and download only")
 	flag.Parse()
 
 	cfg := config.Load()
@@ -27,6 +30,15 @@ func main() {
 	if *dirFlag != "" {
 		cfg.Root = *dirFlag
 	}
+
+	pin := strings.TrimSpace(*pinFlag)
+	if pin == "" {
+		pin = strings.TrimSpace(cfg.PIN)
+	}
+	// -open / -readonly apply to this process; persisted only via config.json fields.
+	authOn := !cfg.Open && !*openFlag
+	readOnly := cfg.ReadOnly || *roFlag
+
 	if cfg.Root == "" {
 		def, err := config.DefaultRoot()
 		if err != nil {
@@ -44,7 +56,12 @@ func main() {
 	}
 	cfg.Root = abs
 
-	if err := config.Save(cfg); err != nil {
+	persist := cfg
+	persist.Root = abs
+	if strings.TrimSpace(*pinFlag) != "" {
+		persist.PIN = pin
+	}
+	if err := config.Save(persist); err != nil {
 		fmt.Fprintf(os.Stderr, "config save: %v\n", err)
 	}
 
@@ -52,15 +69,30 @@ func main() {
 	ips := localIPs()
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	srv := server.New(abs, addr, func(root string) error {
-		cfg.Root = root
-		return config.Save(cfg)
+		persist.Root = root
+		return config.Save(persist)
+	}, server.Options{
+		PIN:      pin,
+		AuthOn:   authOn,
+		ReadOnly: readOnly,
 	})
 
 	fmt.Println()
-	fmt.Println("  ftpsimp — file share over Wi‑Fi")
+	fmt.Println("  ftpsimp — LAN file share")
 	fmt.Println("  ────────────────────────────────")
 	fmt.Printf("  Folder:   %s\n", abs)
 	fmt.Printf("  Port:     %d\n", cfg.Port)
+	if readOnly {
+		fmt.Println("  Mode:     READ-ONLY")
+	} else {
+		fmt.Println("  Mode:     read/write")
+	}
+	if authOn {
+		fmt.Printf("  PIN:      %s\n", srv.PIN())
+		fmt.Println("  Auth:     ON (enter PIN in browser)")
+	} else {
+		fmt.Println("  Auth:     OFF (-open / config) — anyone on LAN can access")
+	}
 	if cfgPath != "" {
 		fmt.Printf("  Settings: %s\n", cfgPath)
 	}
@@ -74,7 +106,7 @@ func main() {
 		}
 	}
 	fmt.Println()
-	fmt.Println("  Корневую папку можно сменить в веб-интерфейсе → Настройки.")
+	fmt.Println("  Смена корневой папки — только с хоста → Settings.")
 	fmt.Println("  Press Ctrl+C to stop.")
 	fmt.Println()
 

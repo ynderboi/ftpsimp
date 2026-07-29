@@ -10,8 +10,13 @@ import (
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
 type Config struct {
-	Root string `json:"root"`
-	Port int    `json:"port"`
+	Root     string `json:"root"`
+	Port     int    `json:"port"`
+	ReadOnly bool   `json:"readOnly"`
+	// Open disables PIN auth (trusted LAN only). Default false = auth on.
+	Open bool `json:"open"`
+	// PIN is optional fixed PIN; empty means generate a new one each start.
+	PIN string `json:"pin,omitempty"`
 }
 
 func Path() (string, error) {
@@ -54,7 +59,9 @@ func Save(cfg Config) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	// Never persist ephemeral empty PIN marker; omit generated runtime PIN.
+	out := cfg
+	data, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return err
 	}

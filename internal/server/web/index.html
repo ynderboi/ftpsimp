@@ -2,66 +2,174 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <title>ftpsimp</title>
   <link rel="stylesheet" href="/style.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 </head>
 <body>
-  <div id="drop-overlay" hidden>
-    <p>Отпустите файлы для загрузки</p>
+  <div id="desktop">
+    <div class="desktop-icons" aria-hidden="true">
+      <div class="desk-icon">
+        <div class="desk-icon-img"></div>
+        <span>ftpsimp</span>
+      </div>
+    </div>
+
+    <div id="gate" class="window login-window" data-win="gate" hidden>
+      <div class="title-bar" data-drag-handle>
+        <span class="title-icon" aria-hidden="true"></span>
+        <span class="title-bar-text" data-i18n="loginTitle">ftpsimp — Log On</span>
+        <div class="title-bar-controls">
+          <button type="button" class="tb-btn" data-win-min title="Minimize">_</button>
+          <button type="button" class="tb-btn" data-win-max title="Maximize">□</button>
+          <button type="button" class="tb-btn" data-win-close data-close-gate title="Close">×</button>
+        </div>
+      </div>
+      <div class="window-body">
+        <form id="login-form" autocomplete="off">
+          <div class="login-row">
+            <div class="login-icon" aria-hidden="true"></div>
+            <div class="login-copy">
+              <p data-i18n="loginHelp">Enter the PIN from the host computer console.</p>
+              <label class="field-row">
+                <span>PIN:</span>
+                <input type="password" id="pin-input" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="one-time-code" autofocus />
+              </label>
+              <p id="gate-error" class="error-text" hidden></p>
+            </div>
+          </div>
+          <div class="dialog-buttons">
+            <button type="submit" class="btn default">OK</button>
+          </div>
+        </form>
+      </div>
+      <div class="resize-handles" aria-hidden="true">
+        <span data-resize="n"></span><span data-resize="e"></span><span data-resize="s"></span><span data-resize="w"></span>
+        <span data-resize="ne"></span><span data-resize="nw"></span><span data-resize="se"></span><span data-resize="sw"></span>
+      </div>
+    </div>
+
+    <div id="app" class="window explorer" data-win="app" hidden>
+      <div class="title-bar" data-drag-handle>
+        <span class="title-icon" aria-hidden="true"></span>
+        <span class="title-bar-text" id="window-title">ftpsimp</span>
+        <div class="title-bar-controls">
+          <button type="button" class="tb-btn" data-win-min title="Minimize">_</button>
+          <button type="button" class="tb-btn" data-win-max title="Maximize">□</button>
+          <button type="button" class="tb-btn" id="btn-logout" data-i18n-title="logout" title="Log off" hidden>×</button>
+        </div>
+      </div>
+
+      <div class="menu-bar" role="menubar">
+        <button type="button" class="menu-item" id="btn-refresh" data-i18n="refresh">Refresh</button>
+        <button type="button" class="menu-item" id="btn-settings" data-i18n="settings">Settings</button>
+        <button type="button" class="menu-item" id="btn-mkdir" data-i18n="newFolder">New Folder</button>
+        <label class="menu-item file-menu" id="btn-upload-wrap">
+          <span data-i18n="upload">Upload</span>
+          <input type="file" id="file-input" multiple hidden />
+        </label>
+        <span class="menu-spacer"></span>
+        <label class="lang-switch" title="Language">
+          <span data-i18n="lang">Lang</span>
+          <select id="lang-select" aria-label="Language">
+            <option value="ru">Рус</option>
+            <option value="en">Eng</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="toolbar">
+        <button type="button" class="tb-tool" id="btn-refresh-tool" data-i18n-title="refresh" title="Refresh">↻</button>
+        <span class="addr-label" data-i18n="address">Address</span>
+        <nav class="address" id="crumbs" aria-label="Address"></nav>
+      </div>
+
+      <div class="explorer-body">
+        <div id="status" class="status-banner" hidden></div>
+        <div class="list-frame">
+          <div class="list-head" id="list-head" hidden>
+            <span class="col-name" data-i18n="colName">Name</span>
+            <span class="col-meta" data-i18n="colSize">Size</span>
+            <span class="col-date" data-i18n="colDate">Modified</span>
+            <span class="col-act"></span>
+          </div>
+          <div id="list" class="list"></div>
+          <div id="empty" class="empty" hidden>
+            <p data-i18n="emptyFolder">This folder is empty.</p>
+            <p class="hint" data-i18n="emptyHint">Drag files here or choose Upload.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-bar-field grow" id="foot-left" data-i18n="ready">Ready</div>
+        <div class="status-bar-field grow" id="statusline">…</div>
+        <div class="status-bar-field" id="foot-right" data-i18n="readWrite">Read/Write</div>
+      </div>
+      <div class="resize-handles" aria-hidden="true">
+        <span data-resize="n"></span><span data-resize="e"></span><span data-resize="s"></span><span data-resize="w"></span>
+        <span data-resize="ne"></span><span data-resize="nw"></span><span data-resize="se"></span><span data-resize="sw"></span>
+      </div>
+    </div>
   </div>
 
-  <header class="top">
-    <div class="brand">
-      <span class="logo" aria-hidden="true"></span>
-      <div>
-        <h1>ftpsimp</h1>
-        <p class="sub" id="root-label">Общая папка</p>
+  <div id="taskbar">
+    <button type="button" class="start-btn" id="start-btn" disabled>
+      <span class="start-logo" aria-hidden="true"></span>
+      <span>Start</span>
+    </button>
+    <div class="task-buttons" id="task-buttons"></div>
+    <div class="tray">
+      <select id="lang-select-tray" class="tray-lang" aria-label="Language">
+        <option value="ru">RU</option>
+        <option value="en">EN</option>
+      </select>
+      <span id="clock" class="clock"></span>
+    </div>
+  </div>
+
+  <div id="drop-overlay" hidden>
+    <div class="window drop-window">
+      <div class="title-bar">
+        <span class="title-bar-text" data-i18n="copying">Copying…</span>
+      </div>
+      <div class="window-body">
+        <p data-i18n="dropHint">Drop files to upload to this folder.</p>
       </div>
     </div>
-    <div class="actions">
-      <button type="button" id="btn-settings" class="btn ghost">Настройки</button>
-      <button type="button" id="btn-mkdir" class="btn ghost">Новая папка</button>
-      <label class="btn primary">
-        Загрузить
-        <input type="file" id="file-input" multiple hidden />
-      </label>
-    </div>
-  </header>
+  </div>
 
-  <dialog id="settings-dialog" class="dialog">
-    <form method="dialog" id="settings-form">
-      <h2>Настройки</h2>
-      <label class="field">
-        <span>Корневая папка сервера</span>
-        <input type="text" id="settings-root" name="root" spellcheck="false" autocomplete="off" placeholder="C:\Users\...\Documents" />
-      </label>
-      <p class="field-hint">Укажите полный путь к папке на этом компьютере. Настройка сохранится и подставится при следующем запуске.</p>
-      <p id="settings-error" class="dialog-error" hidden></p>
-      <div class="dialog-actions">
-        <button type="submit" value="cancel" class="btn ghost">Отмена</button>
-        <button type="submit" value="save" class="btn primary" id="settings-save">Сохранить</button>
+  <div id="settings-modal" hidden>
+    <div class="modal-backdrop" id="settings-backdrop"></div>
+    <div class="window settings-window" id="settings-window" data-win="settings">
+      <div class="title-bar" data-drag-handle>
+        <span class="title-bar-text" data-i18n="settings">Settings</span>
+        <div class="title-bar-controls">
+          <button type="button" class="tb-btn" data-win-min title="Minimize">_</button>
+          <button type="button" class="tb-btn" data-win-max title="Maximize">□</button>
+          <button type="button" class="tb-btn" id="settings-close" title="Close">×</button>
+        </div>
       </div>
-    </form>
-  </dialog>
-
-  <nav class="crumbs" id="crumbs" aria-label="Путь"></nav>
-
-  <main>
-    <div id="status" class="status" hidden></div>
-    <div id="list" class="list"></div>
-    <div id="empty" class="empty" hidden>
-      <p>Папка пуста</p>
-      <p class="hint">Перетащите файлы сюда или нажмите «Загрузить»</p>
+      <div class="window-body">
+        <form id="settings-form">
+          <label class="field-block">
+            <span data-i18n="rootLabel">Root folder (this PC only):</span>
+            <input type="text" id="settings-root" name="root" spellcheck="false" autocomplete="off" />
+          </label>
+          <p class="field-hint" id="settings-hint"></p>
+          <p id="settings-error" class="error-text" hidden></p>
+          <div class="dialog-buttons">
+            <button type="submit" class="btn default" id="settings-save">OK</button>
+            <button type="button" class="btn" id="settings-cancel" data-i18n="cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+      <div class="resize-handles" aria-hidden="true">
+        <span data-resize="n"></span><span data-resize="e"></span><span data-resize="s"></span><span data-resize="w"></span>
+        <span data-resize="ne"></span><span data-resize="nw"></span><span data-resize="se"></span><span data-resize="sw"></span>
+      </div>
     </div>
-  </main>
-
-  <footer class="foot">
-    <span>Одна сеть Wi‑Fi · файлы с компьютера Windows</span>
-  </footer>
+  </div>
 
   <script src="/app.js"></script>
 </body>

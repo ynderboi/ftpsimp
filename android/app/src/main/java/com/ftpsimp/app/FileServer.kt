@@ -11,20 +11,28 @@ import java.io.ByteArrayInputStream
 import java.io.FileNotFoundException
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 
 class FileServer(
     private val context: Context,
     port: Int,
     private var rootUri: Uri,
+    private val pin: String,
+    private val authOn: Boolean,
+    private val readOnly: Boolean,
 ) : NanoHTTPD(port) {
 
     @Volatile
     var rootLabel: String = rootUri.toString()
         private set
+
+    private val sessions = ConcurrentHashMap<String, Long>()
+    private val rng = SecureRandom()
 
     fun updateRoot(uri: Uri) {
         rootUri = uri
@@ -40,16 +48,31 @@ class FileServer(
         val uri = session.uri.substringBefore('?')
         return try {
             when {
+                uri == "/api/status" -> handleStatus(session)
+                uri == "/api/login" && session.method == Method.POST -> handleLogin(session)
+                uri == "/api/logout" && session.method == Method.POST -> handleLogout(session)
+                uri.startsWith("/api/") && needsAuth(uri) && !authenticated(session) ->
+                    text(Response.Status.UNAUTHORIZED, "unauthorized")
+                uri.startsWith("/api/") && readOnly && isWrite(uri, session.method) ->
+                    text(Response.Status.FORBIDDEN, "read-only mode")
                 uri == "/api/list" -> handleList(session)
                 uri == "/api/download" -> handleDownload(session)
                 uri == "/api/upload" && session.method == Method.POST -> handleUpload(session)
                 uri == "/api/mkdir" && session.method == Method.POST -> handleMkdir(session)
                 uri == "/api/delete" && (session.method == Method.POST || session.method == Method.DELETE) ->
                     handleDelete(session)
-                uri == "/api/info" || uri == "/api/settings" && session.method == Method.GET ->
-                    json(JSONObject().put("root", rootLabel))
+                uri == "/api/info" -> json(
+                    JSONObject().put("root", rootLabel).put("readOnly", readOnly)
+                )
+                uri == "/api/settings" && session.method == Method.GET -> json(
+                    JSONObject()
+                        .put("root", rootLabel)
+                        .put("readOnly", readOnly)
+                        .put("settingsLocal", true)
+                        .put("canChangeRoot", false)
+                )
                 uri == "/api/settings" && session.method == Method.POST ->
-                    json(JSONObject().put("root", rootLabel).put("note", "На Android смените папку в приложении"))
+                    text(Response.Status.FORBIDDEN, "На Android смените папку в приложении")
                 uri == "/" || uri.isEmpty() -> asset("web/index.html", "text/html")
                 uri.startsWith("/") -> {
                     val path = "web" + uri
@@ -65,6 +88,84 @@ class FileServer(
                 e.message ?: "error"
             )
         }
+    }
+
+    private fun needsAuth(uri: String): Boolean {
+        if (!authOn) return false
+        return uri != "/api/status" && uri != "/api/login" && uri != "/api/logout"
+    }
+
+    private fun isWrite(uri: String, method: Method): Boolean {
+        return when (uri) {
+            "/api/upload", "/api/mkdir", "/api/delete" -> true
+            "/api/settings" -> method == Method.POST
+            else -> false
+        }
+    }
+
+    private fun authenticated(session: IHTTPSession): Boolean {
+        if (!authOn) return true
+        val id = sessionId(session) ?: return false
+        val exp = sessions[id] ?: return false
+        if (System.currentTimeMillis() > exp) {
+            sessions.remove(id)
+            return false
+        }
+        return true
+    }
+
+    private fun sessionId(session: IHTTPSession): String? {
+        val auth = session.headers["authorization"]
+        if (!auth.isNullOrBlank() && auth.lowercase().startsWith("bearer ")) {
+            return auth.substring(7).trim().ifBlank { null }
+        }
+        val hdr = session.headers["x-session-token"]?.trim()
+        if (!hdr.isNullOrBlank()) return hdr
+        val q = query(session, "token").trim()
+        if (q.isNotEmpty()) return q
+        return cookie(session, COOKIE)
+    }
+
+    private fun handleStatus(session: IHTTPSession): Response {
+        val ok = authenticated(session)
+        val obj = JSONObject()
+            .put("authRequired", authOn)
+            .put("authenticated", ok)
+            .put("readOnly", readOnly)
+            .put("settingsLocal", true)
+        if (ok) obj.put("root", rootLabel)
+        return json(obj)
+    }
+
+    private fun handleLogin(session: IHTTPSession): Response {
+        if (!authOn) {
+            return json(JSONObject().put("ok", true).put("authRequired", false).put("root", rootLabel))
+        }
+        val body = readJsonBody(session)
+        val got = body.optString("pin").trim()
+        if (got != pin) {
+            Thread.sleep(200)
+            return text(Response.Status.UNAUTHORIZED, "invalid pin")
+        }
+        val id = newSessionId()
+        val exp = System.currentTimeMillis() + SESSION_TTL_MS
+        sessions[id] = exp
+        val res = json(
+            JSONObject()
+                .put("ok", true)
+                .put("token", id)
+                .put("root", rootLabel)
+                .put("readOnly", readOnly)
+        )
+        res.addHeader("Set-Cookie", "$COOKIE=$id; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}")
+        return res
+    }
+
+    private fun handleLogout(session: IHTTPSession): Response {
+        sessionId(session)?.let { sessions.remove(it) }
+        val res = json(JSONObject().put("ok", "1"))
+        res.addHeader("Set-Cookie", "$COOKIE=; Path=/; HttpOnly; Max-Age=0")
+        return res
     }
 
     private fun handleList(session: IHTTPSession): Response {
@@ -102,12 +203,15 @@ class FileServer(
             ?: return bad("cannot open")
         val mime = file.type ?: mimeFromName(name)
         val res = newFixedLengthResponse(Response.Status.OK, mime, stream, file.length())
-        res.addHeader("Content-Disposition", "attachment; filename=\"$name\"")
+        val ascii = name.filter { it.code in 32..126 && it != '"' && it != '\\' }.ifEmpty { "download" }
+        val enc = java.net.URLEncoder.encode(name, "UTF-8").replace("+", "%20")
+        res.addHeader("Content-Disposition", "attachment; filename=\"$ascii\"; filename*=UTF-8''$enc")
         return res
     }
 
     private fun handleUpload(session: IHTTPSession): Response {
         val rel = query(session, "path")
+        val overwrite = query(session, "overwrite") == "1"
         val dir = resolveDir(rel) ?: return bad("target folder not found")
         val files = HashMap<String, String>()
         session.parseBody(files)
@@ -117,7 +221,11 @@ class FileServer(
             val name = session.parameters[key]?.firstOrNull()
                 ?: java.io.File(tmpPath).name
             val safe = name.substringAfterLast('/').substringAfterLast('\\')
+            if (safe.isBlank() || safe == "." || safe == "..") return bad("invalid filename")
             val existing = dir.findFile(safe)
+            if (existing != null && !overwrite) {
+                return text(Response.Status.CONFLICT, "file exists: $safe (use overwrite)")
+            }
             existing?.delete()
             val target = dir.createFile(mimeFromName(safe), safe) ?: return bad("cannot create $safe")
             context.contentResolver.openOutputStream(target.uri)?.use { out ->
@@ -133,7 +241,9 @@ class FileServer(
         val body = readJsonBody(session)
         val rel = body.optString("path")
         val name = body.optString("name").trim()
-        if (name.isEmpty() || name.contains('/') || name.contains('\\')) return bad("invalid name")
+        if (name.isEmpty() || name.contains('/') || name.contains('\\') || name == "." || name == "..") {
+            return bad("invalid name")
+        }
         val dir = resolveDir(rel) ?: return bad("not found")
         if (dir.findFile(name) != null) return bad("already exists")
         dir.createDirectory(name) ?: return bad("cannot create")
@@ -204,20 +314,48 @@ class FileServer(
         return URLDecoder.decode(v, StandardCharsets.UTF_8.name())
     }
 
+    private fun cookie(session: IHTTPSession, name: String): String? {
+        val raw = session.headers["cookie"] ?: return null
+        raw.split(';').forEach { part ->
+            val kv = part.trim().split('=', limit = 2)
+            if (kv.size == 2 && kv[0] == name) return kv[1]
+        }
+        return null
+    }
+
+    private fun newSessionId(): String {
+        val b = ByteArray(32)
+        rng.nextBytes(b)
+        return b.joinToString("") { "%02x".format(it) }
+    }
+
     private fun json(obj: JSONObject): Response {
         val bytes = obj.toString().toByteArray(StandardCharsets.UTF_8)
-        return newFixedLengthResponse(
+        val res = newFixedLengthResponse(
             Response.Status.OK,
             "application/json; charset=utf-8",
             ByteArrayInputStream(bytes),
             bytes.size.toLong()
         )
+        res.addHeader("X-Content-Type-Options", "nosniff")
+        return res
     }
+
+    private fun text(status: Response.Status, msg: String): Response =
+        newFixedLengthResponse(status, MIME_PLAINTEXT, msg)
 
     private fun bad(msg: String): Response =
         newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, msg)
 
     companion object {
+        private const val COOKIE = "ftpsimp_sess"
+        private const val SESSION_TTL_MS = 24L * 60 * 60 * 1000
+
+        fun generatePin(): String {
+            val n = SecureRandom().nextInt(1_000_000)
+            return String.format(Locale.US, "%06d", n)
+        }
+
         private fun cleanRel(rel: String): String {
             var r = rel.trim().replace('\\', '/')
             while (r.startsWith("/")) r = r.drop(1)

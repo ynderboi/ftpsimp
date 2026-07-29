@@ -45,17 +45,22 @@ class ServerService : Service() {
             return
         }
         createChannel()
+        val authOn = !prefs.openNoAuth
+        val pin = prefs.fixedPin ?: FileServer.generatePin()
+        currentPort = prefs.port
+        currentPin = if (authOn) pin else ""
+        currentReadOnly = prefs.readOnly
         startForeground(NOTIF_ID, buildNotification(prefs.port))
         try {
-            val s = FileServer(this, prefs.port, root)
+            val s = FileServer(this, prefs.port, root, pin, authOn, prefs.readOnly)
             s.updateRoot(root)
             s.start()
             server = s
             isRunning = true
-            currentPort = prefs.port
             currentRootLabel = s.rootLabel
             broadcastState(true)
         } catch (e: Exception) {
+            currentPin = ""
             stopForeground(STOP_FOREGROUND_REMOVE)
             broadcastState(false, e.message ?: "Ошибка запуска")
             stopSelf()
@@ -69,6 +74,7 @@ class ServerService : Service() {
         }
         server = null
         isRunning = false
+        currentPin = ""
         broadcastState(false)
     }
 
@@ -93,6 +99,8 @@ class ServerService : Service() {
                 .putExtra(EXTRA_RUNNING, running)
                 .putExtra(EXTRA_ERROR, error)
                 .putExtra(EXTRA_ROOT, currentRootLabel)
+                .putExtra(EXTRA_PIN, currentPin)
+                .putExtra(EXTRA_READONLY, currentReadOnly)
                 .putStringArrayListExtra(EXTRA_URLS, ArrayList(urls))
         )
     }
@@ -123,9 +131,13 @@ class ServerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val ips = NetworkUtils.ipv4Addresses(this).joinToString(", ")
+        val pinPart = if (currentPin.isNotEmpty()) " · PIN $currentPin" else ""
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.server_running))
-            .setContentText(if (ips.isNotEmpty()) "$ips:$port" else getString(R.string.notification_text))
+            .setContentText(
+                if (ips.isNotEmpty()) "$ips:$port$pinPart"
+                else getString(R.string.notification_text)
+            )
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentIntent(open)
             .addAction(0, getString(R.string.stop_server), stop)
@@ -145,6 +157,8 @@ class ServerService : Service() {
         const val EXTRA_ERROR = "error"
         const val EXTRA_ROOT = "root"
         const val EXTRA_URLS = "urls"
+        const val EXTRA_PIN = "pin"
+        const val EXTRA_READONLY = "readonly"
         private const val CHANNEL_ID = "ftpsimp_server"
         private const val NOTIF_ID = 42
 
@@ -158,6 +172,14 @@ class ServerService : Service() {
 
         @Volatile
         var currentRootLabel: String = ""
+            private set
+
+        @Volatile
+        var currentPin: String = ""
+            private set
+
+        @Volatile
+        var currentReadOnly: Boolean = false
             private set
 
         fun start(context: Context) {

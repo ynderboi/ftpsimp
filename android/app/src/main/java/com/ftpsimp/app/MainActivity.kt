@@ -48,7 +48,9 @@ class MainActivity : AppCompatActivity() {
                 running = intent.getBooleanExtra(ServerService.EXTRA_RUNNING, false),
                 error = intent.getStringExtra(ServerService.EXTRA_ERROR),
                 root = intent.getStringExtra(ServerService.EXTRA_ROOT),
-                urls = intent.getStringArrayListExtra(ServerService.EXTRA_URLS).orEmpty()
+                urls = intent.getStringArrayListExtra(ServerService.EXTRA_URLS).orEmpty(),
+                pin = intent.getStringExtra(ServerService.EXTRA_PIN),
+                readOnly = intent.getBooleanExtra(ServerService.EXTRA_READONLY, false),
             )
         }
     }
@@ -63,11 +65,25 @@ class MainActivity : AppCompatActivity() {
         binding.btnToggle.setOnClickListener { ensurePermsAndToggle() }
 
         updateFolderLabel()
-        renderState(ServerService.isRunning, null, ServerService.currentRootLabel, emptyList())
+        renderState(
+            ServerService.isRunning,
+            null,
+            ServerService.currentRootLabel,
+            emptyList(),
+            ServerService.currentPin,
+            ServerService.currentReadOnly,
+        )
         if (ServerService.isRunning) {
             val urls = NetworkUtils.ipv4Addresses(this)
                 .map { "http://$it:${ServerService.currentPort}" }
-            renderState(true, null, ServerService.currentRootLabel, urls)
+            renderState(
+                true,
+                null,
+                ServerService.currentRootLabel,
+                urls,
+                ServerService.currentPin,
+                ServerService.currentReadOnly,
+            )
         }
     }
 
@@ -126,7 +142,9 @@ class MainActivity : AppCompatActivity() {
         running: Boolean,
         error: String?,
         root: String?,
-        urls: List<String>
+        urls: List<String>,
+        pin: String?,
+        readOnly: Boolean,
     ) {
         if (!error.isNullOrBlank()) {
             Toast.makeText(this, error, Toast.LENGTH_LONG).show()
@@ -143,6 +161,20 @@ class MainActivity : AppCompatActivity() {
         }
         if (!root.isNullOrBlank()) {
             binding.folderPath.text = root
+        }
+        if (running && !pin.isNullOrBlank()) {
+            binding.pinLabel.visibility = android.view.View.VISIBLE
+            binding.pinValue.visibility = android.view.View.VISIBLE
+            binding.pinValue.text = pin
+        } else {
+            binding.pinLabel.visibility = android.view.View.GONE
+            binding.pinValue.visibility = android.view.View.GONE
+            binding.pinValue.text = ""
+        }
+        binding.modeLabel.text = when {
+            !running -> ""
+            readOnly -> "MODE · read-only · AUTH ${if (pin.isNullOrBlank()) "off" else "on"}"
+            else -> "MODE · read/write · AUTH ${if (pin.isNullOrBlank()) "off" else "on"}"
         }
         binding.urls.text = when {
             running && urls.isNotEmpty() ->
