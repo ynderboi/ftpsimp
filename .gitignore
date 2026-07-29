@@ -1,0 +1,29 @@
+# Go / binaries
+*.exe
+*.exe~
+*.test
+*.out
+/ftpsimp
+/tmp/
+
+# Release artifacts
+/dist/
+*.apk
+*.aab
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/.kotlin/
+android/local.properties
+android/dist/
+android/*.apk
+*.iml
+.idea/
+
+# OS / local env
+.DS_Store
+Thumbs.db
+.env
+.env.*

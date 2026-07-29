@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ftpsimp</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="drop-overlay" hidden>
+    <p>Отпустите файлы для загрузки</p>
+  </div>
+
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <h1>ftpsimp</h1>
+        <p class="sub" id="root-label">Общая папка</p>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="button" id="btn-settings" class="btn ghost">Настройки</button>
+      <button type="button" id="btn-mkdir" class="btn ghost">Новая папка</button>
+      <label class="btn primary">
+        Загрузить
+        <input type="file" id="file-input" multiple hidden />
+      </label>
+    </div>
+  </header>
+
+  <dialog id="settings-dialog" class="dialog">
+    <form method="dialog" id="settings-form">
+      <h2>Настройки</h2>
+      <label class="field">
+        <span>Корневая папка сервера</span>
+        <input type="text" id="settings-root" name="root" spellcheck="false" autocomplete="off" placeholder="C:\Users\...\Documents" />
+      </label>
+      <p class="field-hint">Укажите полный путь к папке на этом компьютере. Настройка сохранится и подставится при следующем запуске.</p>
+      <p id="settings-error" class="dialog-error" hidden></p>
+      <div class="dialog-actions">
+        <button type="submit" value="cancel" class="btn ghost">Отмена</button>
+        <button type="submit" value="save" class="btn primary" id="settings-save">Сохранить</button>
+      </div>
+    </form>
+  </dialog>
+
+  <nav class="crumbs" id="crumbs" aria-label="Путь"></nav>
+
+  <main>
+    <div id="status" class="status" hidden></div>
+    <div id="list" class="list"></div>
+    <div id="empty" class="empty" hidden>
+      <p>Папка пуста</p>
+      <p class="hint">Перетащите файлы сюда или нажмите «Загрузить»</p>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <span>Одна сеть Wi‑Fi · файлы с компьютера Windows</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

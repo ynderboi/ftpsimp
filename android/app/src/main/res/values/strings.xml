@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ftpsimp</string>
+    <string name="start_server">Запустить сервер</string>
+    <string name="stop_server">Остановить</string>
+    <string name="pick_folder">Выбрать папку</string>
+    <string name="server_running">Сервер работает</string>
+    <string name="server_stopped">Сервер остановлен</string>
+    <string name="notification_channel">Файловый сервер</string>
+    <string name="notification_text">Откройте адрес на другом устройстве</string>
+</resources>
