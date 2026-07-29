@@ -4,6 +4,8 @@
 
 Репозиторий: [github.com/ynderboi/ftpsimp](https://github.com/ynderboi/ftpsimp)
 
+**Подробная инструкция:** [docs/GUIDE.md](docs/GUIDE.md)
+
 ## Безопасность
 
 По умолчанию включена **PIN-аутентификация**: при старте печатается 6-значный PIN (или берётся из `-pin` / настроек). Без PIN API недоступен.
