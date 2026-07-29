@@ -1,6 +1,6 @@
 ; ftpsimp Windows installer (Inno Setup 6)
 #define MyAppName "ftpsimp"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.1.2"
 #define MyAppPublisher "ftpsimp"
 #define MyAppExeName "ftpsimp.exe"
 #define MyAppURL "https://github.com/ynderboi/ftpsimp"

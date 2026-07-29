@@ -14,4 +14,4 @@ if errorlevel 1 exit /b 1
 "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" "%~dp0ftpsimp.iss"
 if errorlevel 1 exit /b 1
 echo.
-echo Installer: %~dp0..\dist\ftpsimp-setup-1.1.1.exe
+echo Installer: %~dp0..\dist\ftpsimp-setup-1.1.2.exe

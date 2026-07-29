@@ -33,7 +33,21 @@
               <p data-i18n="loginHelp">Enter the PIN from the host computer console.</p>
               <label class="field-row">
                 <span>PIN:</span>
-                <input type="password" id="pin-input" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="one-time-code" autofocus />
+                <input
+                  type="text"
+                  id="pin-input"
+                  class="pin-input"
+                  name="pin"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  maxlength="12"
+                  autocomplete="one-time-code"
+                  enterkeyhint="done"
+                  autocapitalize="off"
+                  autocorrect="off"
+                  spellcheck="false"
+                  autofocus
+                />
               </label>
               <p id="gate-error" class="error-text" hidden></p>
             </div>

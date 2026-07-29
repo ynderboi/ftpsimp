@@ -257,6 +257,8 @@ input[type="text"],
 input[type="password"],
 select {
   font: inherit;
+  box-sizing: border-box;
+  max-width: 100%;
   height: 21px;
   padding: 2px 4px;
   border-top: 2px solid var(--face-dark);
@@ -265,6 +267,8 @@ select {
   border-bottom: 2px solid #fff;
   background: #fff;
   color: #000;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 input:focus,
@@ -314,15 +318,25 @@ input:disabled {
 
 .field-row {
   display: grid;
-  grid-template-columns: 36px 1fr;
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
 }
 
-.field-row input {
+.field-row input,
+.pin-input {
   width: 100%;
   min-width: 0;
-  letter-spacing: 0.18em;
+  max-width: 100%;
+}
+
+.pin-input {
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  -webkit-text-security: disc;
+  text-security: disc;
 }
 
 .dialog-buttons {
@@ -875,6 +889,51 @@ input:disabled {
   .login-window {
     width: calc(100vw - 16px) !important;
     max-width: 100%;
+    height: auto !important;
+    min-height: 0 !important;
+    left: 8px !important;
+    right: 8px !important;
+    top: max(12px, env(safe-area-inset-top, 0px)) !important;
+    bottom: auto !important;
+  }
+
+  .login-window.maximized {
+    width: calc(100vw - 16px) !important;
+    height: auto !important;
+    left: 8px !important;
+    top: max(12px, env(safe-area-inset-top, 0px)) !important;
+    right: 8px !important;
+    bottom: auto !important;
+  }
+
+  .login-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .login-icon {
+    display: none;
+  }
+
+  .login-copy p {
+    margin-bottom: 10px;
+  }
+
+  .pin-input,
+  .field-block input,
+  input[type="text"],
+  input[type="password"] {
+    font-size: 16px;
+    line-height: 1.2;
+    height: 40px;
+    min-height: 40px;
+    padding: 8px 10px;
+    letter-spacing: normal;
+  }
+
+  .pin-input {
+    letter-spacing: 0.2em;
   }
 
   .settings-window {
@@ -980,11 +1039,22 @@ input:disabled {
   }
 
   .field-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .field-row > span {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .dialog-buttons {
+    margin-top: 16px;
   }
 
   .dialog-buttons .btn {
     flex: 1;
     min-width: 0;
+    min-height: 40px;
   }
 }

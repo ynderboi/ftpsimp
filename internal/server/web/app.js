@@ -281,6 +281,8 @@
   }
 
   function maximizeWindow(win) {
+    // Login dialog stays compact; full-screen maximize breaks the PIN field on phones.
+    if (win === gate) return;
     const st = getState(win);
     if (st.maximized) {
       restoreWindow(win);
@@ -499,8 +501,15 @@
     if (show) {
       app.setAttribute("hidden", "");
       getState(app).minimized = false;
+      gate.classList.remove("maximized", "minimized");
+      getState(gate).maximized = false;
+      getState(gate).minimized = false;
+      gate.style.width = "";
+      gate.style.height = "";
       placeWindow(gate);
-      if (isMobile()) maximizeWindow(gate);
+      // Keep login compact on phones — maximize stretches the PIN field oddly.
+      const maxBtn = gate.querySelector("[data-win-max]");
+      if (maxBtn) maxBtn.textContent = "□";
     } else {
       gate.setAttribute("hidden", "");
       getState(gate).minimized = false;
@@ -600,10 +609,15 @@
     }
   }
 
+  pinInput.addEventListener("input", () => {
+    const cleaned = pinInput.value.replace(/\D+/g, "").slice(0, 12);
+    if (pinInput.value !== cleaned) pinInput.value = cleaned;
+  });
+
   loginForm.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     gateError.hidden = true;
-    const pin = pinInput.value.trim();
+    const pin = pinInput.value.replace(/\D+/g, "").trim();
     if (!pin) {
       gateError.textContent = t("loginPinRequired");
       gateError.hidden = false;
